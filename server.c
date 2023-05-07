@@ -122,7 +122,7 @@ int main(int argc, char* argv[]){
 
     strcpy(ok,"ok");
 
-    listener = socket(AF_INET,SOCK_STREAM|SOCK_NONBLOCK,0);
+    listener = socket(AF_INET,SOCK_STREAM,0);
 
 
     memset(&sv_addr,0,sizeof(sv_addr));
@@ -1138,7 +1138,7 @@ bool controllo_prenotazione(char* codice,struct td* attivo){ // controlla che l'
     return false;
 }
 
-bool controllo_tavolo(char* tav,struct td* attivo,int i){ // controlla che il tavolo non sia attivo su due td diversi
+bool controllo_tavolo(char* tav,struct td* attivo,int socket){ // controlla che il tavolo non sia attivo su due td diversi
     struct td* tmp = attivo;
 
     while(tmp != NULL){
@@ -1148,7 +1148,14 @@ bool controllo_tavolo(char* tav,struct td* attivo,int i){ // controlla che il ta
         tmp= tmp->succ;
     }
 
-    return true;
+    tmp = attivo;
+
+    while(tmp->socket != socket)
+        tmp = tmp->succ;
+
+    
+
+    return tmp->approved;
 }
 
 bool check_cmd(struct cmd_ing com){
