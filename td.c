@@ -36,9 +36,11 @@ bool controlla_piatto(char*);// controlla che il codice del piatto sia presente 
 struct comanda* svuota_comanda(struct comanda* testa);// dopo aver inviato la comanda al server, viene utilizzata per cancellare la lista dei piatti
 int pows(int,int); // per qualche motivo non trova la pow all'interno della libreria math.h
 
-#define ID_LEN 3
-#define LEN_RIGHE 8 
-
+#define ID_LEN 3 // lunghezza id
+#define LEN_RIGHE 8 // lunghezza per i piatti
+#define MSG_SERV_LEN 10 // lunghezza messaggio chiusura;
+#define CODE_LEN 5 // lunghezza codice 
+#define OK_LEN 2// lunghezza messaggio di conferma
 
 int main(int argc, char* argv[]){
      int ret, sd, len,fdmax,j;
@@ -48,18 +50,18 @@ int main(int argc, char* argv[]){
     
     struct sockaddr_in srv_addr,my_addr;
 
-    char ok[2];
-    char codice[5];
-    char id[3];
-    char cl[2];
+    char ok[OK_LEN];
+    char codice[CODE_LEN];
+    char id[ID_LEN];
+    char msg_serv[MSG_SERV_LEN];
      fd_set master,read_fds;
 
     char MessaggioIniziale[1024] = "**************BENVENUTO*****************\n\n 1) help\t\t -->mostra i dettagli dei comandi\n 2) menu\t\t --> mostra il menu dei piatti\n 3) comanda\t\t --> invia una comanda\n 4) conto \t\t --> chiede il conto\n\n";
-
+    bool accesso = false;
     struct cmd_ing com;
     /* pattern di variabili utili per l'inserimento della comanda*/
-    char breaker; 
-    char piatto[4];
+    char breaker; // char per terminare l'inserimento della comanda
+    char piatto[6]; // variabile d'appoggio 
     int piatti_inviati = 0;
     com.piatto = NULL;
     struct comanda* ultimo=NULL;
@@ -119,43 +121,46 @@ int main(int argc, char* argv[]){
             exit(1);
         }
 
-    do{ //controllo codice di accesso
-                system("clear");
-
-                printf("Inserisci il codice della prenotazione:\t");
-                scanf("%s",codice);
-
-                len = strlen(codice);
-
-                ret = send(sd,(void*)codice,len,0);
-
-                if(ret<0){
-                    perror("Errore in fase di invio: \n");
-                    exit(-1);
-                }
-
-              
-
-                ret = recv(sd,(void*)ok,2,0);
-
-
-                if(ret<0){
-                    perror("Errore in fase di ricezione: \n");
-                    exit(-1);
-                }
-
-                if(strncmp(ok,"ko",2)==0){
-                    printf("Errore, controlla se il codice, l'ora e la data della tua prenotazione sono corretti... premi c e Invio per continuare\n");
-                    while(getchar()!='c');// utilizzo per mettere in pausa lo stdout
-                }
-
-                
-        }while(strncmp(ok,"ok",2)!=0);
-
-    system("clear");
-    printf("%s",MessaggioIniziale);
-
     while(1){
+            if(accesso == false){
+
+                    do{ //controllo codice di accesso
+                                system("clear");
+
+                                printf("Inserisci il codice della prenotazione:\t");
+                                scanf("%s",codice);
+
+                                len = strlen(codice);
+
+                                ret = send(sd,(void*)codice,len,0);
+
+                                if(ret<0){
+                                    perror("Errore in fase di invio: \n");
+                                    exit(-1);
+                                }
+
+                            
+
+                                ret = recv(sd,(void*)ok,2,0);
+
+
+                                if(ret<0){
+                                    perror("Errore in fase di ricezione: \n");
+                                    exit(-1);
+                                }
+
+                                if(strncmp(ok,"ko",2)==0){
+                                    printf("Errore, controlla se il codice, l'ora e la data della tua prenotazione sono corretti... premi c e Invio per continuare\n");
+                                    while(getchar()!='c');// utilizzo per mettere in pausa lo stdout
+                                }
+
+                                
+                        }while(strncmp(ok,"ok",2)!=0);
+                    accesso = true;
+                    system("clear");
+                    printf("%s",MessaggioIniziale);
+
+            }
 
             printf("Premi Enter per digitare un comando...\n");
             read_fds = master;
@@ -209,7 +214,6 @@ int main(int argc, char* argv[]){
                                                                                             ultimo->succ = NULL;
                                                                                         }
                                                                                         n_piatti++;              
-
                                                                                 } 
                                                         }
 
@@ -222,6 +226,7 @@ int main(int argc, char* argv[]){
                                                     }else if(strcmp(com.cmd,"menu")==0){
                                                                 stampa_menu();
                                                     }else if(strcmp(com.cmd,"comanda")==0){
+                                                              
                                                                 struct comanda* dainviare = com.piatto; 
                                                                  
                                                                 len = strlen(com.cmd);
@@ -242,15 +247,14 @@ int main(int argc, char* argv[]){
                                                                 ret = send(sd,(void*)&n_piatti,sizeof(uint16_t),0);
 
                                                                 n_piatti = ntohs(n_piatti);
-
+                                                               
 
                                                                 for(piatti_inviati =0;piatti_inviati<n_piatti;piatti_inviati++){ // invio i piatti ordinati uno alla volta facendo la serializzazione di ogni piatto
-
+                                                                                              
                                                                                             sprintf(piatto,"%s%i",dainviare->codice,dainviare->quantita);
 
                                                                                             len = strlen(piatto);
-
-
+                                                                                        
                                                                                             len_com = htons(len);
 
                        
@@ -269,13 +273,9 @@ int main(int argc, char* argv[]){
 
                                                                 }
 
-
-                                                              
-
-                                                             
-
-
+                                                               
                                                 }else if(strcmp(com.cmd,"conto")==0){
+                                                                    char close; // variabile per la chiusura del conto
 
                                                                     conto_tot = 0;
                                                                     
@@ -329,16 +329,46 @@ int main(int argc, char* argv[]){
 
                                                                     printf("Totale: %i\n",conto_tot);
 
+                                                                    do{
+                                                                            getchar();
+                                                                            printf("Primi Invio per chiudere la sessione ... ");
+
+                                                                            scanf("%c",&close);
+
+                                                                            if(close == '\n'){
+                                                                                    accesso = false;
+                                                                            }else{
+                                                                                printf("\nTasto errato...\n");
+                                                                            }   
+
+                                                                    }while(close !='\n');
+
+                                                                   
+                                                                
+
                                                 }
                                         }else{ // gestione per la chiusura del server
-                                                len = strlen(cl);
+                                                char com[6];
+                                                char tav[4];
+                                                char stato;
+                                            
+                                                ret = recv(sd,(void*)msg_serv,MSG_SERV_LEN,0);
 
-                                                ret = recv(sd,(void*)&cl,len,0);
-
-                                                if(strncmp(cl,"cl",2)==0 || ret == 0 ){
+                                                if(strncmp(msg_serv,"cl",2)==0 || ret == 0 ){
                                                     printf("Disconnessione\n");
                                                     close(sd);
                                                     exit(1);
+                                                } else {
+                                                    sscanf(msg_serv,"%s%s%*c%c",com,tav,&stato);
+
+                                                    printf("Comanda: %s",com);
+
+                                                    if(stato == 'p'){
+                                                        printf(" in preparazione...\n");
+                                                    }else if(stato == 's'){
+                                                        printf(" in servizio...\n");
+                                                    }
+                                                    
                                                 }
 
                                         }

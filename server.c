@@ -67,8 +67,10 @@ struct kd{
 #define BUFFER_LEN 1024
 #define LEN_RIGHE 8
 #define LEN_COD 5
+#define COM_LEN 10 // lunghezza per le comande in preparazione e servizio
 
 void stampa_comande_tavolo(char* tavolo); // funzione per la stampa dei comande di un tavolo
+void stampa_comande(); // funzione per la stampa di tutte le comande attive
 void stampa_comande_stato(char stato); // funzione che stampa le comande nello stato richiesto
 bool controlla_comande(); // controlla le comande attive
 struct clienti* aggiungi_cliente(struct clienti*,int); // aggiunge il cliente appena connesso alla lista cli
@@ -90,6 +92,8 @@ int pows(int,int);
 struct kd* rimuovi_kd(int ,struct kd*); // elimina il kd disconnesso
 bool controllo_tavolo(char*,struct td*,int); 
 struct td* rimuovi_td(int ,struct td*); // elimina il tablet disconnesso
+int trova_tavolo_socket(char*,struct td*);//trova il socket del tablet corrispondente;
+struct td* libera_tavolo(int ,struct td* );
 
 
 
@@ -182,8 +186,8 @@ int main(int argc, char* argv[]){
                         do{
                             printf("%s","Digita un comando: ");
                             scanf("%s",com.cmd);
-
-                            if(strcmp(com.cmd,"stat")==0){
+                            com.par[0] = '0';
+                            if(strcmp(com.cmd,"stat")==0 && getchar()!='\n'){
                                 scanf("%s",com.par);
                             }
 
@@ -197,19 +201,26 @@ int main(int argc, char* argv[]){
                                 case 'a': case 'p': case 's':
                                     stampa_comande_stato(com.par[0]);
                                     break;
+                                case '0' :
+                                    stampa_comande();
+                                    break;
                             }
                         }else{
                             bool controllo =false;
                             int j;
                             int len;
-                            char cl[2];
+                            char cl[COM_LEN];
                             strcpy(cl,"cl");
                             controllo=controlla_comande(); // controllo le comande attive
                             if(controllo==true){
                                 for(j=0;j<= fdmax;j++){
-                                    if(FD_ISSET(j,&kd_fds)||FD_ISSET(j,&td_fds)){ // invio segnale di spegnimento 
+                                    if(FD_ISSET(j,&kd_fds)){ // invio segnale di spegnimento 
                                         len = strlen(cl);
                                         ret = send(j,(void*)cl,len,0);
+                                    }
+
+                                    if(FD_ISSET(j,&td_fds)){
+                                        ret = send(j,(void*)cl,COM_LEN,0);
                                     }
                                     
                                 }
@@ -410,9 +421,11 @@ int main(int argc, char* argv[]){
                                                        
                                                         printf("Ricezione codice del cliente...\n");
 
+                                                       // controlla che il codice non sia di un tavolo gia attivo
+                                                       
+                                                       
                                                         attivo->approved = controllo_prenotazione(ing_codice,attivo); // controlla che il codice corrisponda ad una prenotazione e che data e ora siano corretti
-
-                                                        attivo->approved = controllo_tavolo(attivo->tavolo,tablet,i); // controlla che il codice non sia di un tavolo gia attivo
+                                                        attivo->approved = controllo_tavolo(attivo->tavolo,tablet,i); 
                                                        
                                                         if(attivo->approved == true){
                                                                 printf("Codice trovato...\n");
@@ -456,7 +469,7 @@ int main(int argc, char* argv[]){
 
                                                 ret = recv(i,(void*)comando,len,0);
 
-                                                
+                                                printf("Ricezione comando...\n");                                                
 
                                                 if(ret < 0){
                                                     perror("Errore nella recv comando:");
@@ -556,6 +569,7 @@ int main(int argc, char* argv[]){
 
                                                         sprintf(cl,"%i",ordini_inattesa);
                                                         printf("Invio segnale ai kitchen device...\n");
+
                                                         for(j = 0;j<=fdmax;j++){ // aggiorno il kd sul numero di ordini in attesa
                                                              
                                                             if(FD_ISSET(j,&kd_fds)){
@@ -637,7 +651,6 @@ int main(int argc, char* argv[]){
                                                                                 break;
                                                                             }                                                              
                                                                         }
-                                                                         printf("%s %i %s %i\n",codice_piatto,costo_singolo,piatti_tmp[k].codice,costo_singolo*piatti_tmp[k].quantita);
                                                                         sprintf(riga_conto,"%c%c %i %i",piatti_tmp[k].codice[0],piatti_tmp[k].codice[1],piatti_tmp[k].quantita,costo_singolo*piatti_tmp[k].quantita);
                                                                         
                                                                         ret = send(i,(void*)riga_conto,LEN_RIGHE,0);
@@ -645,6 +658,8 @@ int main(int argc, char* argv[]){
                                                                         fclose(menu);
                                                                 }   
                                                             }
+
+                                                        tablet = libera_tavolo(i,tablet);
 
                                                         fclose(comande);
 
@@ -657,26 +672,18 @@ int main(int argc, char* argv[]){
 
 
                                     } else if(FD_ISSET(i,&kd_fds)){
+                                        char buffer[COM_LEN];
+                                        char comanda_accettata[6];
+                                        char tavolo[4];
+                                        char stato;
                                         char prenotato[2];
                                         char cl[2];
+                                        int tablet_socket;
+                                        int ret_tab;
 
-                                       
-                                        ret = recv(i,(void*)prenotato,2,0);
-                                      
-                                        if(strncmp(prenotato,"ok",2)==0){ //riceve un avviso nel caso in cui un kd abbia prelevato la prima comanda in  attesa
-                                            int j;
-                                            ordini_inattesa--;
-                                            printf("Un kitchen device ha accettato l'ultima comanda immessa...\n");
-                                            sprintf(cl,"%i",ordini_inattesa);
-                                            for(j=0;j<=fdmax;j++){
-                                                if(FD_ISSET(j,&kd_fds)){
-                                                    ret = send(j,(void*)cl,2,0);
-                                                }
-                                            }
-                                           
-                                            strcpy(prenotato," ");
-                                        }
-                                        else if(ret==0){ // avverte e elimina il kd che si e' chiuso involontariamente
+                                        ret = recv(i,(void*)buffer,COM_LEN,0);
+
+                                        if(ret==0){ // avverte e elimina il kd che si e' chiuso involontariamente
                                             printf("Disconnessione Kitchen:%i\n",i);
                                             FD_CLR(i,&master);
                                             FD_CLR(i,&kd_fds);
@@ -684,16 +691,51 @@ int main(int argc, char* argv[]){
                                             if(i==fdmax)
                                                     fdmax = fdmax-1;
                                              continue;
+                                        }else {
+
+                                                sscanf(buffer,"%s%s%*c%c",comanda_accettata,tavolo,&stato);
+
+                                                tablet_socket = trova_tavolo_socket(tavolo,tablet);
+
+                                                printf("Invio info al td...");
+
+                                                ret = send(tablet_socket,(void*)buffer,COM_LEN,0);
+
+                                                if(ret<0){
+                                                    perror("Errore send:");
+                                                    break;
+                                                }
+
+                                                if(stato == 'p'){
+
+                                                        ret = recv(i,(void*)prenotato,2,0);
+                                                    
+                                                        if(strncmp(prenotato,"ok",2)==0){ //riceve un avviso nel caso in cui un kd abbia prelevato la prima comanda in  attesa
+                                                            int j;
+                                                            ordini_inattesa--;
+                                                            printf("Un kitchen device ha accettato l'ultima comanda immessa...\n");
+                                                            sprintf(cl,"%i",ordini_inattesa);
+                                                            for(j=0;j<=fdmax;j++){
+                                                                if(FD_ISSET(j,&kd_fds)){
+                                                                    ret = send(j,(void*)cl,2,0);
+                                                                }
+                                                            }
+                                                        
+                                                            strcpy(prenotato," ");
+                                                        }
+                                                    
+                                                }
+                                
+
                                         }
 
                                     }
 
-                    }
+
+                        }
 
 
             }
-
-
         }
     }
 
@@ -734,6 +776,50 @@ void stampa_comande_tavolo(char* tavolo){
                     }
 
                     printf("%s %s\n",com->c_comanda,stato);
+                    for(i = 0;i<com->n_piatti;i++){
+                                fscanf(comande,"%*c %s %i\n",piatto->codice,&piatto->quantita);
+                                printf("%s %i\n",piatto->codice,piatto->quantita);
+                    }
+
+
+             }
+    }
+
+free(com);
+free(piatto);
+
+fclose(comande);
+return;
+
+}
+
+
+void stampa_comande(){
+    FILE* comande = fopen("./file/comande.txt","r+");
+    char tipo;
+    int i;
+    struct comanda* com = (struct comanda*)malloc(sizeof(struct comanda));
+    struct righe* piatto = (struct righe*)malloc(sizeof(struct righe)); 
+    char *stato;
+
+    if(comande == NULL){
+        printf("Non ci sono comande");
+        return;
+    }
+
+    while(!feof(comande)){
+             fscanf(comande,"%c %s %s %c %i\n",&tipo,com->c_comanda,com->c_tavolo,&com->stato,&com->n_piatti);
+             if(tipo == 'c'){
+                    if(com->stato == 'p'){ 
+                        stato = "<in preparazione>";
+                    } else if(com->stato == 'a'){
+                        stato = "<in attesa>";
+         
+                    }else{
+                        stato = "<in servizio>";
+                    }
+
+                    printf("%s %s %s\n",com->c_comanda,com->c_tavolo,stato);
                     for(i = 0;i<com->n_piatti;i++){
                                 fscanf(comande,"%*c %s %i\n",piatto->codice,&piatto->quantita);
                                 printf("%s %i\n",piatto->codice,piatto->quantita);
@@ -983,8 +1069,7 @@ bool compara_data(char* data1,char* data2){
     sec = difftime(d2,d1);
     if(sec == 0){
         return true;
-    }
-       
+    }  
     else 
         return false;
 }
@@ -1142,7 +1227,7 @@ bool controllo_tavolo(char* tav,struct td* attivo,int socket){ // controlla che 
     struct td* tmp = attivo;
 
     while(tmp != NULL){
-        if(strncmp(tav,tmp->tavolo,3)==0 && i!=tmp->socket){
+        if(strncmp(tav,tmp->tavolo,3)==0 && socket!=tmp->socket){
             return false;
         }
         tmp= tmp->succ;
@@ -1150,32 +1235,34 @@ bool controllo_tavolo(char* tav,struct td* attivo,int socket){ // controlla che 
 
     tmp = attivo;
 
-    while(tmp->socket != socket)
+    while(tmp->socket != socket){
         tmp = tmp->succ;
+    }
 
     
-
-    return tmp->approved;
+        return tmp->approved;
+    
 }
 
 bool check_cmd(struct cmd_ing com){
     if(strcmp(com.cmd,"stat")==0){
             switch(com.par[0]){
-            case 'T': case 'a': case 'p': case 's':{
-
-
-                return true;
-                break;
-                }
-            default :
-                {                   return false;
-                }
+                    case 'T': case 'a': case 'p': case 's':case '0':{
+                        return true;
+                        break;
+                        }
+                    default :
+                        {    
+                            printf("Parametro non valido ...\n");               
+                            return false;
+                        }
                 
         }
     } else if(strcmp(com.cmd,"stop")==0){
         return true;
     }
     printf("Comando non valido...\n");
+    while(getchar()!='\n');
     return false;
 }
 
@@ -1273,4 +1360,31 @@ struct td* rimuovi_td(int i,struct td* tablet){
     free(elimina);
     return tablet;
 
+}
+
+int trova_tavolo_socket(char* tavolo,struct td* tablet){
+
+    struct td* tmp = tablet;
+
+    while(tmp!=NULL && strcmp(tmp->tavolo,tavolo)!=0){
+        tmp = tmp->succ;
+    }
+
+    return tmp->socket;
+
+}
+
+struct td* libera_tavolo(int socket,struct td* tablet){
+
+    struct td* tmp = tablet;
+
+    while(tmp!=NULL && tmp->socket != socket){
+        tmp = tmp->succ;
+    }
+
+    tmp->approved = false;
+    tmp->numero_comanda = 0;
+    strcpy(tmp->tavolo," ");
+
+    return tablet;
 }

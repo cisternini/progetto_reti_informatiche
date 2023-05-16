@@ -40,6 +40,8 @@ bool in_lista_preparazione(char* codice,char* tavolo,struct comanda* testa);// c
 
 #define ID_LEN 3 // lunghezza dell'id
 #define CL_LEN 2 // lunghezza per i comandi di chiusura
+#define COM_LEN 10 // lunghezza per le comande in preparazione e servizio
+
 
 int main(int argc, char* argv[]){
      int ret, sd, len,segnali,fdmax,j;
@@ -152,6 +154,7 @@ int main(int argc, char* argv[]){
                                                                 if(strcmp(com.cmd,"take")==0){
                                                                     FILE* comande = fopen("./file/comande.txt","r+");
                                                                     struct comanda* nuova_comanda = (struct comanda*)malloc(sizeof(struct comanda));
+                                                                    char comanda_accettata[COM_LEN]; // comanda accettata da inviare, contiene il nome della comanda e il codice del tavolo
                                                                     fpos_t cur; // posizione corrente nel file
                                                                     int num_piatto; 
                                                                     char tipo;
@@ -193,10 +196,20 @@ int main(int argc, char* argv[]){
                                                                         printf("\n");
                                                                         in_preparazione = aggiungi_comanda(nuova_comanda,in_preparazione); // aggiungo la comanda alla lista in preparazione
 
+                                                                        sprintf(comanda_accettata,"%s %s %c",nuova_comanda->c_comanda,nuova_comanda->c_tavolo,'p');
+
+                                                                        printf("%s",comanda_accettata);
+
+                                                                        ret = send(sd,(void*)comanda_accettata,COM_LEN,0);
+
+                                                                        if(ret<0){
+                                                                            perror("Errore nella send:");
+                                                                            continue;
+                                                                        }
+
                                                                         fclose(comande);
 
                                                                         
-
                                                                         ret = send(sd,(void*)prenotato,CL_LEN,0); // invia il segnale al server per decrementare il numero di ordini
                                                                     } else {
                                                                         printf("Non ci sono comande pendenti...\n");
@@ -233,23 +246,28 @@ int main(int argc, char* argv[]){
                                                                     char parametro[9]; // preleva la comanda e il tavolo da settare
                                                                     char codice[4]; // variabile d'appoggio per il confronto
                                                                     char tavolo[3]; // come sopra
+                                                                    char comanda_servita[COM_LEN];
                                                                     char tipo; // ----
                                                                     char stato; // ----
                                                                     int piatti; //----
                                                                     fpos_t cur; // salva la posizione corrente nel file
                                                                     int j; // indice per il parsing
+                                                                    int k;
 
 
                                                                     scanf("%s",parametro);
                                                                    
-                                                                    for(j=0;j<5;j++){ // parse della comanda
+                                                                    for(j=0;parametro[j]!='-';j++){ // parse della comanda
                                                                         com.comanda[j] = parametro[j];
                                                                     }
-                                                                    com.comanda[5] = '\0';
-                                                                    for(j=0;j<3;j++){ // parse del tavolo
-                                                                        com.tavolo[j] = parametro[j+5];
-                                                                    }
+                                                                    com.comanda[j] = '-';
+                                                                    j++;
+                                                                    com.comanda[j] = '\0';
                                                                    
+                                                                    for(k=0;k<3;k++){ // parse del tavolo
+                                                                        com.tavolo[k] = parametro[k+j];
+                                                                    }
+                                                                  
                                                                     if(check_cmd(com)==false) // controllo se il parametro e' corretto
                                                                     {
                                                                         printf("Errore nell'inserimento della comanda o del tavolo...\n");
@@ -259,7 +277,6 @@ int main(int argc, char* argv[]){
 
                                                                     while(1){
                                                                         int k;
-                                                                       
                                                                        
                                                                         if(feof(comande)){
                                                                             printf("Comanda %4s del tavolo %s non trovata\n",com.comanda,com.tavolo);
@@ -285,11 +302,20 @@ int main(int argc, char* argv[]){
                                                                                     }
                                                                                     fsetpos(comande,&cur); // setto il cursore
                                                                                     stato = 's'; // modifico lo stato
-                                                                                    com.comanda[4] = '\0';
+                                                                                    com.comanda[j-1] = '\0';
                                                                                     fprintf(comande," %s %s %c %i",com.comanda,com.tavolo,stato,piatti);  // salvo sul file                                                                     
                                                                                     in_preparazione = elimina_comanda(codice,tavolo,in_preparazione);
-                                                                                    printf("\nCOMANDA IN SERVIZIO");
-                                                                        
+                                                                                    printf("\nCOMANDA IN SERVIZIO\n");
+
+                                                                                    sprintf(comanda_servita,"%s %s %c",com.comanda,com.tavolo,'s');
+
+                                                                                    ret = send(sd,(void*)comanda_servita,COM_LEN,0);
+
+                                                                                                    
+                                                                                    if(ret<0){
+                                                                                        perror("Errore nella send:");
+                                                                                        continue;
+                                                                                    }                                                                        
                                                                                                                                                     
                                                                                     break;
                                                                                 }
@@ -300,7 +326,8 @@ int main(int argc, char* argv[]){
                                                                             }
                                                                         } 
                                                                     }
-                                                                        
+
+                                                                    com.comanda[j-1] = '-';
                                                                     fclose(comande);
                                                                 }
 
@@ -357,19 +384,40 @@ struct comanda* aggiungi_comanda(struct comanda* com, struct comanda* testa){
 struct comanda* elimina_comanda(char* comanda,char* tavolo, struct comanda* testa){
         struct comanda* tmp = testa;
         struct comanda* elimina = testa;
+        struct righe* tmp_piatti;
+        struct righe* elimina_piatti;
 
         if(testa == NULL){
             return testa;
         } else {
+
             while(strncmp(comanda,elimina->c_comanda,4)!=0 || strncmp(tavolo,elimina->c_tavolo,3)!=0){
                 tmp = elimina;
                 elimina = elimina->succ;
             }
 
-            tmp->succ = elimina->succ;
+            tmp_piatti = elimina->piatti;
+            elimina_piatti = elimina ->piatti;
+
+            while(elimina_piatti!=NULL){
+                tmp_piatti = elimina_piatti->succ;
+                free(elimina_piatti);
+                elimina_piatti = tmp_piatti;
+            }
+            elimina->piatti = NULL;
+            
+            if(elimina == testa){
+                testa = elimina->succ;
+            } else {
+                tmp->succ = elimina->succ;
+            }
+
+           
             elimina->succ = NULL;
             free(elimina);
+            
         }
+    
     return testa;
 
 }
