@@ -1,6 +1,6 @@
 # 🍽️ Sistema di Gestione Ristorante Distribuito
 
-Questo progetto implementa un'applicazione distribuita basata sul paradigma **Client-Server** per la gestione delle prenotazioni e delle comande di un ristorante. [cite\_start]Il sistema è stato sviluppato in linguaggio C utilizzando socket TCP/IP per il corso di Reti Informatiche (A.A. 2022/2023)[cite: 968, 971].
+Questo progetto implementa un'applicazione distribuita basata sul paradigma **Client-Server** per la gestione delle prenotazioni e delle comande di un ristorante. Il sistema è stato sviluppato in linguaggio C utilizzando socket TCP/IP per il corso di Reti Informatiche (A.A. 2022/2023).
 
 ## 📋 Descrizione del Progetto
 
@@ -35,7 +35,7 @@ Il dispositivo utilizzato dai cuochi.
 ### 3\. Client & Table Device
 
   * **Client (`client.c`)**: Permette di interrogare il server sulla disponibilità dei tavoli (`find`) e finalizzare la prenotazione (`book`) ricevendo un codice univoco.
-  * **Table Device**: (Implementato logicamente lato server per la gestione socket, il codice lato client gestisce l'interfaccia). [cite\_start]Richiede il codice prenotazione per sbloccarsi[cite: 987].
+  * **Table Device**: (Implementato logicamente lato server per la gestione socket, il codice lato client gestisce l'interfaccia). Richiede il codice prenotazione per sbloccarsi.
 
 ## 🚀 Compilazione e Esecuzione
 
@@ -87,28 +87,28 @@ L'ordine di avvio consigliato è:
 
 ### Server
 
-  * [cite\_start]`stat`: Mostra lo stato di tutte le comande giornaliere[cite: 1030].
-  * [cite\_start]`stat <tavolo>`: Mostra le comande relative a un tavolo specifico (es. `stat T1`)[cite: 1031].
-  * [cite\_start]`stat <stato>`: Filtra per stato (`a`=attesa, `p`=preparazione, `s`=servizio)[cite: 1032].
-  * [cite\_start]`stop`: Termina il server (solo se non ci sono comande pendenti)[cite: 1054].
+  * `stat`: Mostra lo stato di tutte le comande giornaliere.
+  * `stat <tavolo>`: Mostra le comande relative a un tavolo specifico (es. `stat T1`).
+  * `stat <stato>`: Filtra per stato (`a`=attesa, `p`=preparazione, `s`=servizio).
+  * `stop`: Termina il server (solo se non ci sono comande pendenti).
 
 ### Client (Prenotazione)
 
-  * [cite\_start]`find <cognome> <persone> <data> <ora>`: Cerca disponibilità (es. `find Rossi 4 25-12-23 20`)[cite: 1130].
-  * [cite\_start]`book <opzione>`: Prenota un tavolo scelto dalla lista restituita da `find`[cite: 1138].
+  * `find <cognome> <persone> <data> <ora>`: Cerca disponibilità (es. `find Rossi 4 25-12-23 20`).
+  * `book <opzione>`: Prenota un tavolo scelto dalla lista restituita da `find`.
   * `esc`: Termina il client.
 
 ### Kitchen Device (Cucina)
 
-  * [cite\_start]`take`: Prende in carico la comanda più vecchia in attesa[cite: 1101].
-  * [cite\_start]`show`: Mostra le comande attualmente in preparazione su questo dispositivo[cite: 1108].
-  * [cite\_start]`ready <comanda>-<tavolo>`: Segna una comanda come pronta/in servizio (es. `ready com1-T1`)[cite: 1120].
+  * `take`: Prende in carico la comanda più vecchia in attesa.
+  * `show`: Mostra le comande attualmente in preparazione su questo dispositivo.
+  * `ready <comanda>-<tavolo>`: Segna una comanda come pronta/in servizio (es. `ready com1-T1`).
 
 ### Table Device (Tablet)
 
-  * [cite\_start]`menu`: Visualizza i piatti disponibili[cite: 1079].
-  * [cite\_start]`comanda <piatto-qta> ...`: Invia un ordine (es. `comanda A1-2 P1-1`)[cite: 1083].
-  * [cite\_start]`conto`: Richiede il totale e libera il tavolo[cite: 1087].
+  * `menu`: Visualizza i piatti disponibili.
+  * `comanda <piatto-qta> ...`: Invia un ordine (es. `comanda A1-2 P1-1`).
+  * `conto`: Richiede il totale e libera il tavolo.
 
 ## 📂 Struttura dei File
 
@@ -126,8 +126,8 @@ Il sistema richiede la seguente struttura di directory per funzionare correttmen
 ## ⚠️ Note Tecniche
 
   * **Protocollo**: I messaggi sono scambiati tramite stringhe formattate o strutture dati serializzate. Il server utilizza `select()` per non bloccare l'esecuzione su un singolo client.
-  * [cite\_start]**Validazione**: Lato client (`client.c`) sono implementati controlli rigorosi sul formato data (GG-MM-AA) e ora, oltre che sulla validità logica della prenotazione (es. non prenotare nel passato)[cite: 1131].
-  * [cite\_start]**Codici Prenotazione**: Generati randomicamente dal server e associati al timestamp della prenotazione[cite: 983].
+  * **Validazione**: Lato client (`client.c`) sono implementati controlli rigorosi sul formato data (GG-MM-AA) e ora, oltre che sulla validità logica della prenotazione (es. non prenotare nel passato).
+  * **Codici Prenotazione**: Generati randomicamente dal server e associati al timestamp della prenotazione.
 
 -----
 
